@@ -1,4 +1,4 @@
-# MLC_A3C
+# MLC's RL hacker group coding the A3C algorithm from scratch!
 
 ## Invaluable references 
 * very clean clear code: [MorvanZhou's A3C](https://github.com/MorvanZhou/pytorch-A3C/blob/master/discrete_A3C.py)
