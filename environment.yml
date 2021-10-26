@@ -1,0 +1,15 @@
+name: mlc-a3c
+channels:
+  - conda-forge
+  - pytorch
+  - defaults
+dependencies:
+  - python=3.8
+  - numpy
+  - pytorch
+  - gym
+  - box2d-py
+  - gym[Box_2D]
+  - torchvision
+  - matplotlib
+  - imageio
