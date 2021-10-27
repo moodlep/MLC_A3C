@@ -16,10 +16,10 @@ class Policy(nn.Module):
         self.l3 = nn.Linear(hidden, action_dim)
 
     def forward(self, state):
-        print(state)
+        #print(state)
         q = F.leaky_relu(self.l1(state))
         q = F.leaky_relu(self.l2(q))
-        print(q.shape)
+        #print(q.shape)
         return F.softmax(self.l3(q), dim=1)
 
     def get_action(self, state):

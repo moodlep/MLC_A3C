@@ -32,8 +32,8 @@ if __name__ == '__main__':
     global_ctr = mp.Value('i',0)  # T - the global step counter
     lock = mp.Lock()  # send to worker when it needs to update global counter
 
-    # pr = [ ActorCriticWorker(env_name,global_critic,global_actor,global_opt,global_ctr,lock) for _ in range(mp.cpu_count())]
-    pr = [ ActorCriticWorker(env_name,global_critic,global_actor,global_opt,global_ctr,lock) for _ in range(1)]
+    pr = [ ActorCriticWorker(env_name,global_critic,global_actor,global_opt,global_ctr,lock) for _ in range(mp.cpu_count())]
+    # pr = [ ActorCriticWorker(env_name,global_critic,global_actor,global_opt,global_ctr,lock) for _ in range(1)]
 
     for p in pr:
         print(type(p))

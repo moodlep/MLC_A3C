@@ -5,6 +5,7 @@ import os
 
 import gym
 import torch
+import numpy as np
 import torch.nn.functional as F
 import torch.multiprocessing as mp
 from actor_critic_networks import Critic, Policy
@@ -46,7 +47,7 @@ class ActorCriticWorker(mp.Process):
 
         while not done and (self.t - t_start+1)%self.max_step !=0:
             action = self.actor.get_action(torch.tensor(state, dtype=torch.float).reshape(1,-1))
-            print(action)
+            #print(action)
             next_state, reward,done, _info = self.env.step(action)
             rewards.append(reward)
             actions.append(action)
@@ -70,7 +71,7 @@ class ActorCriticWorker(mp.Process):
         returns.reverse() # list of returns
 
         # 3. Calculating Loss
-        states_t = torch.tensor(states, dtype = torch.float)
+        states_t = torch.tensor(np.array(states), dtype = torch.float)
         actions_t = torch.tensor(actions, dtype = torch.int)
         returns_t = torch.tensor(returns, dtype = torch.float)
 
