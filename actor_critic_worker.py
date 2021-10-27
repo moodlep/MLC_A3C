@@ -43,8 +43,10 @@ class ActorCriticWorker(mp.Process):
         actions = []
         rewards = []
         returns = []
+
         while not done and (self.t - t_start+1)%self.max_step !=0:
-            action = self.actor.get_action(torch.tensor(state, dtype=torch.double))
+            action = self.actor.get_action(torch.tensor(state, dtype=torch.float).reshape(1,-1))
+            print(action)
             next_state, reward,done, _info = self.env.step(action)
             rewards.append(reward)
             actions.append(action)
@@ -58,7 +60,7 @@ class ActorCriticWorker(mp.Process):
         # Calculate reward
         with torch.no_grad():
             if not done:
-                R = self.critic(torch.tensor(state,dtype = torch.double)).item() #calculating the value function
+                R = self.critic(torch.tensor(state,dtype = torch.float)).item() #calculating the value function
             else:
                 R = 0.0
 
@@ -68,15 +70,15 @@ class ActorCriticWorker(mp.Process):
         returns.reverse() # list of returns
 
         # 3. Calculating Loss
-        states_t = torch.tensor(states, dtype = torch.double)
-        actions_t = torch.tensor(actions, dtype = torch.int64)
-        returns_t = torch.tensor(returns, dtype = torch.double)
+        states_t = torch.tensor(states, dtype = torch.float)
+        actions_t = torch.tensor(actions, dtype = torch.int)
+        returns_t = torch.tensor(returns, dtype = torch.float)
 
         td_error = returns_t - self.critic(states_t)	# n_batch x 1
-        critic_loss = F.mse_loss(td_error) # 1 x 1
+        critic_loss = (td_error)**2 # 1 x 1
         actor_loss = -1.0*td_error.detach()*self.actor.log_prob(states_t, actions_t) # n_batch x 1
         # Take mean of the actor and critic loss
-        total_loss = (critic_loss + actor_loss.mean())
+        total_loss = (critic_loss + actor_loss).mean()
 
         # 4. Calculate grad and update optimiser
         self.opt.zero_grad()
