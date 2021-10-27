@@ -15,15 +15,16 @@ from actor_critic_networks import Critic, Policy
 # t is the local counter per process
 
 class ActorCriticWorker(mp.Process):
-    def __init__(self,env_name,global_critic,global_actor,opt,T,lock,gamma = 0.99,max_step=100):
+    def __init__(self,env_name,global_critic,global_actor,opt,T,lock,global_t_max, gamma = 0.99,max_step=100):
         super(ActorCriticWorker, self).__init__()
         self.env = gym.make(env_name)
         self.t = 0
-        self.max_step = max_step
+        self.max_step = max_step  # max steps for episode/rollout
         self.T = T
         self.lock = lock
         self.gamma = gamma
         self.opt = opt
+        self.global_t_max = global_t_max
 
         self.actor = Policy(self.env.observation_space.shape[0], self.env.action_space.n)
         self.critic = Critic(self.env.observation_space.shape[0])

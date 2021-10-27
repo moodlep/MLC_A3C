@@ -19,20 +19,20 @@ if __name__ == '__main__':
 
     state_dim = env.observation_space.shape[0]
     action_dim = env.action_space.n
-
+    global_t_max = 100000
 
     global_critic = Critic(state_dim)
     global_actor = Policy(state_dim,action_dim)
     global_critic.share_memory()
     global_actor.share_memory()
-    n_workers = 10
     env_name = "LunarLander-v2"
 
     global_opt = SharedAdam(list(list(global_critic.parameters()) + list(global_actor.parameters())))
     global_ctr = mp.Value('i',0)  # T - the global step counter
     lock = mp.Lock()  # send to worker when it needs to update global counter
 
-    pr = [ ActorCriticWorker(env_name,global_critic,global_actor,global_opt,global_ctr,lock) for _ in range(mp.cpu_count())]
+    pr = [ ActorCriticWorker(env_name,global_critic,global_actor,global_opt,global_ctr,lock, global_t_max) for _ in range(
+        mp.cpu_count())]
     # pr = [ ActorCriticWorker(env_name,global_critic,global_actor,global_opt,global_ctr,lock) for _ in range(1)]
 
     for p in pr:
