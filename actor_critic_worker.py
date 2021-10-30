@@ -15,16 +15,18 @@ from actor_critic_networks import Critic, Policy
 # t is the local counter per process
 
 class ActorCriticWorker(mp.Process):
-    def __init__(self,env_name,global_critic,global_actor,opt,T,lock,global_t_max, gamma = 0.99,max_step=100):
+    def __init__(self,env_name,global_critic,global_actor,opt,T,lock,global_t_max, gamma = 0.99,max_step=100,
+                 beta=0.01):
         super(ActorCriticWorker, self).__init__()
         self.env = gym.make(env_name)
         self.t = 0
-        self.max_step = max_step  # max steps for episode/rollout
+        self.t_max = max_step  # max steps for episode/rollout
         self.T = T
         self.lock = lock
         self.gamma = gamma
         self.opt = opt
         self.global_t_max = global_t_max
+        self.beta = beta
 
         self.actor = Policy(self.env.observation_space.shape[0], self.env.action_space.n)
         self.critic = Critic(self.env.observation_space.shape[0])
@@ -48,7 +50,7 @@ class ActorCriticWorker(mp.Process):
             rewards = []
             returns = []
 
-            while not done and (self.t - t_start+1)%self.max_step !=0:
+            while not done and (self.t - t_start+1)%self.t_max !=0:
                 action = self.actor.get_action(torch.tensor(state, dtype=torch.float).reshape(1,-1))
                 #print(action)
                 next_state, reward,done, _info = self.env.step(action)
@@ -81,8 +83,9 @@ class ActorCriticWorker(mp.Process):
             td_error = returns_t - self.critic(states_t)	# n_batch x 1
             critic_loss = (td_error)**2 # 1 x 1
             actor_loss = -1.0*td_error.detach()*self.actor.log_prob(states_t, actions_t) # n_batch x 1
+            entropy_loss = self.beta * self.actor.entropy(states_t) # n_batch x 1
             # Take mean of the actor and critic loss
-            total_loss = (critic_loss + actor_loss).mean()
+            total_loss = (critic_loss + actor_loss + entropy_loss).mean()
 
             # 4. Calculate grad and update optimiser
             self.opt.zero_grad()
