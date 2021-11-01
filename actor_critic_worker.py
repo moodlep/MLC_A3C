@@ -9,13 +9,16 @@ import numpy as np
 import torch.nn.functional as F
 import torch.multiprocessing as mp
 from actor_critic_networks import Critic, Policy
+from tensorboardX import SummaryWriter
 
 # T is a global counter
 # Tmax is total steps overall
 # t is the local counter per process
 
 class ActorCriticWorker(mp.Process):
-    def __init__(self,env_name,global_critic,global_actor,opt,T,lock,global_t_max, gamma = 0.99,max_step=100,
+    def __init__(self,env_name,global_critic,global_actor,opt,T,lock,global_t_max, summary_writer = None,
+                 eval_runs = 10, gamma = 0.99,
+                 max_step=100,
                  beta=0.01):
         super(ActorCriticWorker, self).__init__()
         self.env = gym.make(env_name)
@@ -33,6 +36,17 @@ class ActorCriticWorker(mp.Process):
         self.global_critic = global_critic
         self.global_actor = global_actor
 
+        # TFBoard settings
+        self.TFB_Counter = 0
+        self.summary_writer = summary_writer
+        self.eval_counter = 0
+        self.eval_runs = eval_runs
+
+        if not os.path.exists('logs'):
+            os.makedirs('logs')
+        self.summary_writer = SummaryWriter(log_dir='logs')
+
+
     def run(self):
 
         while self.T.value < self.global_t_max:
@@ -40,6 +54,15 @@ class ActorCriticWorker(mp.Process):
             # 1. Sync local from global - we need this for the actor: get_action()
             self.actor.load_state_dict(self.global_actor.state_dict())
             self.critic.load_state_dict(self.global_critic.state_dict())
+
+            # Tensorboard - run evaluation for n episodes and collect the states to TFBoard
+            # if self.summary_writer is not None and (self.T.value - self.TFB_Counter) > 500:
+            if self.name == 'ActorCriticWorker-1' and (self.T.value - self.TFB_Counter) > 50:
+                print("Tensorboard is active")
+                self.TFB_Counter = self.T.value
+                eval_reward = self.eval()
+                self.summary_writer.add_scalar("eval_reward", eval_reward, self.eval_counter)
+                self.eval_counter +=1
 
             # 2. Create a rollout
             t_start = self.t
@@ -52,7 +75,6 @@ class ActorCriticWorker(mp.Process):
 
             while not done and (self.t - t_start+1)%self.t_max !=0:
                 action = self.actor.get_action(torch.tensor(state, dtype=torch.float).reshape(1,-1))
-                #print(action)
                 next_state, reward,done, _info = self.env.step(action)
                 rewards.append(reward)
                 actions.append(action)
@@ -83,7 +105,7 @@ class ActorCriticWorker(mp.Process):
             td_error = returns_t - self.critic(states_t)	# n_batch x 1
             critic_loss = (td_error)**2 # 1 x 1
             actor_loss = -1.0*td_error.detach()*self.actor.log_prob(states_t, actions_t) # n_batch x 1
-            entropy_loss = self.beta * self.actor.entropy(states_t) # n_batch x 1
+            entropy_loss = -1*self.beta * self.actor.entropy(states_t) # n_batch x 1
             # Take mean of the actor and critic loss
             total_loss = (critic_loss + actor_loss + entropy_loss).mean()
 
@@ -99,4 +121,21 @@ class ActorCriticWorker(mp.Process):
 
             # take a step!
             self.opt.step()
+
+    def eval(self):
+
+        for _ in range(self.eval_runs):
+            state = self.env.reset()
+            done = False
+            eval_t = 0
+            accumulated_reward = 0.0
+
+            while not done and eval_t <= self.t_max:
+                action = self.actor.get_action(torch.tensor(state, dtype=torch.float).reshape(1,-1))
+                next_state, reward,done, _info = self.env.step(action)
+                accumulated_reward += reward
+                eval_t +=1
+                state = next_state
+
+        return accumulated_reward/self.eval_runs
 
