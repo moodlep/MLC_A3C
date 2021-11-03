@@ -10,7 +10,7 @@ from actor_critic_networks import Critic, Policy
 from shared_adam import SharedAdam
 from actor_critic_worker import ActorCriticWorker
 # from torch.utils.tensorboard import SummaryWriter
-from tensorboardX import SummaryWriter
+# from tensorboardX import SummaryWriter
 import os
 
 if __name__ == '__main__':

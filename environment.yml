@@ -1,10 +1,10 @@
-name: mlc-a3c
+name: mlc-a3c-37
 channels:
   - conda-forge
   - pytorch
   - defaults
 dependencies:
-  - python=3.8
+  - python=3.7
   - numpy
   - pytorch
   - gym
@@ -13,3 +13,4 @@ dependencies:
   - torchvision
   - matplotlib
   - imageio
+  - tensorboard

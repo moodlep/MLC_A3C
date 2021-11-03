@@ -9,7 +9,8 @@ import numpy as np
 import torch.nn.functional as F
 import torch.multiprocessing as mp
 from actor_critic_networks import Critic, Policy
-from tensorboardX import SummaryWriter
+# from tensorboardX import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
 
 # T is a global counter
 # Tmax is total steps overall
@@ -38,13 +39,14 @@ class ActorCriticWorker(mp.Process):
 
         # TFBoard settings
         self.TFB_Counter = 0
-        self.summary_writer = summary_writer
+        # self.summary_writer = summary_writer
         self.eval_counter = 0
         self.eval_runs = eval_runs
 
-        if not os.path.exists('logs'):
-            os.makedirs('logs')
-        self.summary_writer = SummaryWriter(log_dir='logs')
+        log_dir = 'logs'+self.name
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir)
+        self.summary_writer = SummaryWriter(log_dir=log_dir)
 
 
     def run(self):
