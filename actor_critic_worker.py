@@ -151,12 +151,12 @@ class ActorCriticWorker(mp.Process):
         self.summary_writer.close()
 
     def eval(self):
-        print("timer:",self.T.value) 
+        print("timer:",self.T.value)
+        accumulated_reward = 0.0
         for i in range(self.eval_runs):
             state = self.env.reset()
             done = False
             eval_t = 0
-            accumulated_reward = 0.0
             if self.DEBUG_F: print("Eval For Loop: ", i)
 
             while not done and eval_t <= self.t_max:
