@@ -47,7 +47,7 @@ class ActorCriticWorker(mp.Process):
 
     def setup_logging(self, tensorboard, wandb):
         if tensorboard:
-            log_dir = 'logs'+self.name
+            log_dir = 'logs/'+self.name
             if not os.path.exists(log_dir):
                 os.makedirs(log_dir)
             self.summary_writer = SummaryWriter(log_dir=log_dir)
