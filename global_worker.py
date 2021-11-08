@@ -4,7 +4,6 @@ import torch.multiprocessing as mp
 from actor_critic_networks import Critic, Policy
 from shared_adam import SharedAdam
 from actor_critic_worker import ActorCriticWorker
-import wandb
 from torch.utils.tensorboard import SummaryWriter
 
 if __name__ == '__main__':

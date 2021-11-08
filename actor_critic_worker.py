@@ -9,7 +9,7 @@ import numpy as np
 import torch.multiprocessing as mp
 from actor_critic_networks import Critic, Policy
 from torch.utils.tensorboard import SummaryWriter
-import wandb
+# import wandb
 
 # T is a global counter
 # Tmax is total steps overall
@@ -54,8 +54,8 @@ class ActorCriticWorker(mp.Process):
             if not os.path.exists(log_dir):
                 os.makedirs(log_dir)
             self.summary_writer = SummaryWriter(log_dir=log_dir)
-        if wandb:
-            self.run = wandb.init(project="mlc-a3c", entity="moodlep", group="a3c")
+        # if wandb:
+        #     self.run = wandb.init(project="mlc-a3c", entity="moodlep", group="a3c")
 
     def run(self):
         self.setup_logging(tensorboard=True, wandb=False)
