@@ -4,3 +4,5 @@ logs
 *.local
 wandb
 *.zip
+do_not_git
+*.log

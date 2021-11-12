@@ -10,6 +10,7 @@ import torch.multiprocessing as mp
 from actor_critic_networks import Critic, Policy
 from torch.utils.tensorboard import SummaryWriter
 # import wandb
+import logging
 
 # T is a global counter
 # Tmax is total steps overall
@@ -21,7 +22,7 @@ class ActorCriticWorker(mp.Process):
                  eval_runs = 10, gamma = 0.99,
                  max_step=1000,
                  beta=0.01,
-                 DEBUG_F = False,
+                 debug_F = False,
                  eval_freq = 5000):
         super(ActorCriticWorker, self).__init__()
         self.env = gym.make(env_name)
@@ -33,7 +34,7 @@ class ActorCriticWorker(mp.Process):
         self.opt = opt
         self.global_t_max = global_t_max
         self.beta = beta
-        self.DEBUG_F = DEBUG_F
+        self.debug_F = debug_F
         self.actor = Policy(self.env.observation_space.shape[0], self.env.action_space.n)
         self.critic = Critic(self.env.observation_space.shape[0])
         self.global_critic = global_critic
@@ -42,11 +43,12 @@ class ActorCriticWorker(mp.Process):
 
         # TFBoard settings
         self.TFB_Counter = 0  # keeps track of how often we want to log to tensorboard
-        self.setup_logging(tensorboard=True, wandb=False)
+        # self.setup_logging(tensorboard=True, wandb=False)
 
         # Eval run settings
         self.eval_counter = 0
         self.eval_runs = eval_runs
+
 
     def setup_logging(self, tensorboard, wandb):
         if tensorboard:
@@ -57,24 +59,30 @@ class ActorCriticWorker(mp.Process):
         # if wandb:
         #     self.run = wandb.init(project="mlc-a3c", entity="moodlep", group="a3c")
 
+        # Setup logger
+        # print(self.name)
+        logging.basicConfig(level=logging.DEBUG, filename=self.name+".log", format='%(asctime)s :: %(levelname)s :: %(funcName)s :: %(lineno)d \
+:: %(message)s')
+
     def run(self):
         self.setup_logging(tensorboard=True, wandb=False)
 
         while self.T.value < self.global_t_max:
-            if self.DEBUG_F: print("Outer Loop: ", self.T.value)
+            logging.debug(("Main While Loop: global timestep", self.T.value))
             # 1. Sync local from global - we need this for the actor: get_action()
             self.actor.load_state_dict(self.global_actor.state_dict())
             self.critic.load_state_dict(self.global_critic.state_dict())
 
             # Tensorboard - run evaluation for n episodes and collect the stats to TFBoard
             if (self.T.value - self.TFB_Counter) > self.eval_freq:
-                if self.DEBUG_F: print("Inside tensorboard if statement: ", (self.T.value - self.TFB_Counter))
+                logging.debug(("Evaluation: 1. Tensorboard if statement: global timestep - TB counter", (self.T.value -
+                                                                                       self.TFB_Counter)))
                 self.TFB_Counter = self.T.value
                 eval_reward = self.eval()
-                if self.DEBUG_F: print("Before SummaryWriter.add_scalar ")
+                logging.debug(("Evaluation: 2. After eval(), before SummaryWriter.add_scalar "))
                 self.summary_writer.add_scalar("eval_reward", eval_reward, self.T.value)
                 # wandb.log({"eval_reward": eval_reward, "T": self.T.value})
-                if self.DEBUG_F: print("After SummaryWriter.add_scalar")
+                logging.debug(("Evaluation: 3. After SummaryWriter.add_scalar"))
                 # self.summary_writer.flush()
                 self.eval_counter +=1
 
@@ -87,10 +95,10 @@ class ActorCriticWorker(mp.Process):
             rewards = []
             returns = []
 
-            if self.DEBUG_F: print("starting rollout: ", t_start)
+            logging.debug(("Starting Rollout: local timestep: ", t_start))
 
             while not done and (self.t - t_start+1)%self.t_max !=0:
-                if self.DEBUG_F: print("Inner Loop: ", self.t)
+                logging.debug(("Rollout While Loop: local timestep", self.t))
 
                 action = self.actor.get_action(torch.tensor(state, dtype=torch.float).reshape(1,-1))
                 next_state, reward,done, _info = self.env.step(action)
@@ -100,8 +108,10 @@ class ActorCriticWorker(mp.Process):
                 state = next_state
                 self.t  += 1
                 # lock memory
+                logging.debug(("Rollout: before lock"))
                 with self.lock:
                     self.T.value +=1
+                logging.debug(("Rollout: after lock"))
 
             # Calculate reward
             with torch.no_grad():
@@ -109,13 +119,13 @@ class ActorCriticWorker(mp.Process):
                     R = self.critic(torch.tensor(state,dtype = torch.float)).item() #calculating the value function
                 else:
                     R = 0.0
-            if self.DEBUG_F: print("Calculate Reward: ", R)
+            logging.debug(("Calculate Reward - call critic: ", R))
 
 
             for i in range(len(states)-1,-1,-1):  #Reverse because this is a bellman-type of calculation (you know all your rewards from t to the end)
                 R = rewards[i] + self.gamma*R
                 returns.append(R)
-                if self.DEBUG_F: print("Returns Calc For Loop: ", i)
+                logging.debug(("Returns Calc For Loop: step ", i, R))
             returns.reverse() # list of returns
 
             # 3. Calculating Loss
@@ -124,40 +134,45 @@ class ActorCriticWorker(mp.Process):
             returns_t = torch.tensor(returns, dtype = torch.float)
 
             td_error = returns_t - self.critic(states_t)	# n_batch x 1
+            logging.debug(("Losses: 1. TD Error ", str(td_error.detach().mean())))
             critic_loss = (td_error)**2 # 1 x 1
+            logging.debug(("Losses: 2. Critic Loss ", str(critic_loss.detach().mean())))
             actor_loss = -1.0*td_error.detach()*self.actor.log_prob(states_t, actions_t) # n_batch x 1
+            logging.debug(("Losses: 3. Actor Loss ", str(actor_loss.detach().mean())))
             entropy_loss = -1*self.beta * self.actor.entropy(states_t) # n_batch x 1
+            logging.debug(("Losses: 4. Entropy Loss ", str(entropy_loss.detach().mean())))
             # Take mean of the actor and critic loss
             total_loss = (critic_loss + actor_loss + entropy_loss).mean()
-            if self.DEBUG_F: print("Total Loss at ", self.T.value, " is ", total_loss.item())
+            logging.debug(("Total Loss at ", self.T.value, " is ", total_loss.item()))
             # wandb.log({"loss": total_loss.item()})
 
             # 4. Calculate grad and update optimiser
             self.opt.zero_grad()
             total_loss.backward()
-            if self.DEBUG_F: print("Calc Grads Backward: ")
+            logging.debug(("Calculate Gradients - backward() "))
 
             # align global grads to local grads
             for gp, lp in zip(self.global_critic.parameters(), self.critic.parameters()):
                 gp._grad = lp.grad
+            logging.debug(("Update Global parameters -Critic "))
             for gp, lp in zip(self.global_actor.parameters(), self.actor.parameters()):
                 gp._grad = lp.grad
-            if self.DEBUG_F: print("Global Grads Updated: ")
+            logging.debug(("Update Global parameters -Actor "))
 
             # take a step!
             self.opt.step()
-            if self.DEBUG_F: print("Optimiser Step: ")
+            logging.debug(("Optimiser Step - After"))
 
         self.summary_writer.close()
 
     def eval(self):
-        print("timer:",self.T.value)
+        logging.debug(("eval(): timer:",self.T.value))
         accumulated_reward = 0.0
         for i in range(self.eval_runs):
             state = self.env.reset()
             done = False
             eval_t = 0
-            if self.DEBUG_F: print("Eval For Loop: ", i)
+            logging.debug(("eval(): For Loop Run: ", i))
 
             while not done and eval_t <= self.t_max:
                 action = self.actor.get_action(torch.tensor(state, dtype=torch.float).reshape(1,-1))
@@ -165,7 +180,7 @@ class ActorCriticWorker(mp.Process):
                 accumulated_reward += reward
                 eval_t +=1
                 state = next_state
-                if self.DEBUG_F: print("Eval Loop: ", accumulated_reward, eval_t)
+                logging.debug(("eval(): While Loop - trajectory rollout: ", accumulated_reward, eval_t))
 
         return accumulated_reward/self.eval_runs
 

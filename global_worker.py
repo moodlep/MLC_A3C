@@ -16,7 +16,7 @@ if __name__ == '__main__':
 
     state_dim = env.observation_space.shape[0]
     action_dim = env.action_space.n
-    global_t_max = 1000000
+    global_t_max = 10000
 
     global_critic = Critic(state_dim)
     global_actor = Policy(state_dim,action_dim)
@@ -44,7 +44,7 @@ if __name__ == '__main__':
     #                          ) for _ in range(1)]
 
     for p in pr:
-        print(type(p))
+        # print(type(p))
         p.start()  # start each ActorCriticWorker process
 
     for p in pr:
