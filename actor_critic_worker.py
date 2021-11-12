@@ -19,10 +19,10 @@ import logging
 
 class ActorCriticWorker(mp.Process):
     def __init__(self,env_name,global_critic,global_actor,opt,T,lock,global_t_max,
+                global_high_score,
                  eval_runs = 10, gamma = 0.99,
                  max_step=1000,
                  beta=0.01,
-                 debug_F = False,
                  eval_freq = 5000):
         super(ActorCriticWorker, self).__init__()
         self.env = gym.make(env_name)
@@ -34,12 +34,12 @@ class ActorCriticWorker(mp.Process):
         self.opt = opt
         self.global_t_max = global_t_max
         self.beta = beta
-        self.debug_F = debug_F
         self.actor = Policy(self.env.observation_space.shape[0], self.env.action_space.n)
         self.critic = Critic(self.env.observation_space.shape[0])
         self.global_critic = global_critic
         self.global_actor = global_actor
         self.eval_freq = eval_freq
+        self.gloabl_high_score = global_high_score
 
         # TFBoard settings
         self.TFB_Counter = 0  # keeps track of how often we want to log to tensorboard
@@ -181,6 +181,26 @@ class ActorCriticWorker(mp.Process):
                 eval_t +=1
                 state = next_state
                 logging.debug(("eval(): While Loop - trajectory rollout: ", accumulated_reward, eval_t))
+        avg_score =accumulated_reward/self.eval_runs
+        logging.debug(("eval(): before checkpoint and global_score"))
+        with self.lock:                    
+            if avg_score > self.gloabl_high_score.value:
+                logging.debug(("eval(): Updated high_score : ",avg_score))
+                self.gloabl_high_score.value = avg_score
+                self.save('checkpoint') 
+        logging.debug(("eval(): after checkpoint and global_score : ",avg_score))
+ 
+        return avg_score
+    
+    def save(self, filename):
+        torch.save(self.critic.state_dict(), filename + "_critic")
+        torch.save(self.actor.state_dict(), filename + "_actor")
+        torch.save(self.opt.state_dict(), filename + "_optimizer")
+        
 
-        return accumulated_reward/self.eval_runs
+
+    def load(self, filename):
+        self.critic.load_state_dict(torch.load(filename + "_critic"))
+        self.actor.load_state_dict(torch.load(filename + "_actor"))
+        self.opt.load_state_dict(torch.load(filename + "_optimizer"))
 

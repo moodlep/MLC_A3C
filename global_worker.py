@@ -28,9 +28,10 @@ if __name__ == '__main__':
 
     global_opt = SharedAdam(list(list(global_critic.parameters()) + list(global_actor.parameters())))
     global_ctr = mp.Value('i',0)  # T - the global step counter
+    global_high_score = mp.Value('d',-float('inf'))
     lock = mp.Lock()  # send to worker when it needs to update global counter
 
-    pr = [ ActorCriticWorker(env_name,global_critic,global_actor,global_opt,global_ctr,lock, global_t_max
+    pr = [ ActorCriticWorker(env_name,global_critic,global_actor,global_opt,global_ctr,lock, global_t_max,global_high_score
                              ) for _ in range(mp.cpu_count())]
 
     ## passing summary writer to workers
